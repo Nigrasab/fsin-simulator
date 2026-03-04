@@ -1,5 +1,6 @@
 # fsin-simulator
-Fractal Sfiral Artificial Neurons Simulator
+Fractal Sfiral Artificial Neurons Simulator 
+
 Назначение приложения 
 
 Развернутое веб-приложение — это интерактивный симулятор фрактальных сфиральных искусственных нейронов (ФСИН).
