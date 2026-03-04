@@ -15,5 +15,5 @@
 - Модуль статистической проверки индекса структурной устойчивости.
 
 ## Быстрый старт
-1. **Интерфейс:** [Ссылка на ваш Streamlit App]
+1. **Интерфейс:** [https://fsin-simulator-fddapps6frntzpyvt9hcq2q.streamlit.app/]
 2. **Анализ:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Nigrasab/fsin-simulator/blob/main/notebooks/analysis.ipynb)
