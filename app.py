@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
 
-# --- 1. ЯДРО ФСИН (МАТЕМАТИКА РЕЗОНАНСА) ---
+# --- 1. ВЫЧИСЛИТЕЛЬНОЕ ЯДРО (ФСИН) ---
 class SfiralNeuron:
     def __init__(self, frequency=1.236, phase_shift=np.pi/2):
         self.frequency = frequency
@@ -20,7 +20,8 @@ class SfiralNetwork:
         self.layer_size = layer_size
         self.balanced = balanced
         self.neurons = [SfiralNeuron() for _ in range(layer_size)]
-        self.weights = np.random.uniform(-1, 1, (input_size, layer_size)) * base_weight
+        # Генерируем веса один раз
+        self.weights = np.random.uniform(-0.5, 0.5, (input_size, layer_size)) * base_weight
     def forward(self, inputs):
         outputs = []
         for i, n in enumerate(self.neurons):
@@ -31,110 +32,134 @@ class SfiralNetwork:
             outputs.append(val)
         return np.array(outputs)
 
-# --- 2. ГЕОМЕТРИЯ СФИРАЛИ (BLENDER S-УЗЕЛ) ---
-def generate_sfiral(r, hc, hs, res=600):
-    r_a, pts = r / 2.0, []
-    for i in range(int(res*0.3)+1):
-        t = i / int(res*0.3)
-        phi = np.pi * (1 - t)
-        pts.append([r_a + r_a*np.cos(phi), -r_a*np.sin(phi), (hs/2)*t])
-    for i in range(1, int(res*0.7)+1):
-        t = i / int(res*0.7)
-        pts.append([r*np.cos(2*np.pi*t), r*np.sin(2*np.pi*t), (hs/2) + hc*t])
-    pts = np.array(pts)
-    return np.vstack([-pts[::-1], pts])
-
-# --- 3. МОДЕЛИРОВАНИЕ РОБОТА-НАСЕКОМОГО ---
-def get_robot_insect_data(wurf, body_l=217.6, body_w=166.2):
-    # Размеры сегментов ноги по Вурфу
-    l1 = 88.0  # Femur
-    l2 = l1 / wurf  # Tibia
-    l3 = l2 / wurf  # Tarsus
+# --- 2. ГЕОМЕТРИЯ РОБОТА-НАСЕКОМОГО ---
+def get_hexapod_model(wurf, states, body_l, body_w, r_coil):
+    # Длины сегментов по Вурфу
+    l1 = r_coil * 0.5       # Coxa (Тазовый узел)
+    l2 = l1 * wurf          # Femur (Бедро)
+    l3 = l2 * wurf          # Tibia (Голень)
     
     traces = []
-    # Корпус (прямоугольник)
+    # 1. Корпус (Центральная платформа)
     bx = [body_l/2, body_l/2, -body_l/2, -body_l/2, body_l/2]
     by = [body_w/2, -body_w/2, -body_w/2, body_w/2, body_w/2]
     bz = [0, 0, 0, 0, 0]
-    traces.append(go.Scatter3d(x=bx, y=by, z=bz, mode='lines', line=dict(color='silver', width=8), name="Корпус"))
+    traces.append(go.Scatter3d(x=bx, y=by, z=bz, mode='lines', line=dict(color='silver', width=10), name="Корпус"))
 
-    # Ноги (6 штук)
-    side = [1, 1, 1, -1, -1, -1]
-    angles = [np.pi/4, 0, -np.pi/4, np.pi/4, 0, -np.pi/4]
+    # 2. Ноги (6 конечностей)
+    # Позиции крепления ног на корпусе
+    mount_points = [
+        [body_l/2, body_w/2],   # Передняя правая
+        [0, body_w/2],          # Средняя правая
+        [-body_l/2, body_w/2],  # Задняя правая
+        [body_l/2, -body_w/2],  # Передняя левая
+        [0, -body_w/2],         # Средняя левая
+        [-body_l/2, -body_w/2]  # Задняя левая
+    ]
+    
+    # Базовые углы разворота ног (от оси Y)
+    base_angles = [np.pi/4, 0, -np.pi/4, 3*np.pi/4, np.pi, 5*np.pi/4]
     
     for i in range(6):
-        start_x = (body_l/2.5) if i in [0, 3] else (0 if i in [1, 4] else -body_l/2.5)
-        start_y = (body_w/2) * side[i]
+        start_pos = mount_points[i]
+        # Берем данные из нейросети (последнее состояние) для анимации
+        # Если индекс устойчивости 0, смещение будет 0
+        move_offset = states[-1, i % states.shape[1]] * 0.5 
         
-        # Точки сегментов
-        ang = angles[i] + (0 if side[i]>0 else np.pi)
-        p1 = [start_x + l1*np.cos(ang), start_y + l1*np.sin(ang), -20]
-        p2 = [p1[0] + l2*np.cos(ang), p1[1] + l2*np.sin(ang), -60]
-        p3 = [p2[0] + l3*np.cos(ang), p2[1] + l3*np.sin(ang), -100]
+        angle = base_angles[i] + move_offset
         
-        lx = [start_x, p1[0], p2[0], p3[0]]
-        ly = [start_y, p1[1], p2[1], p3[1]]
-        lz = [0, p1[2], p2[2], p3[2]]
+        # Точка 1: Конец Coxa (горизонтально)
+        p1 = [
+            start_pos[0] + l1 * np.cos(angle),
+            start_pos[1] + l1 * np.sin(angle),
+            0
+        ]
+        # Точка 2: Конец Femur (подъем вверх/наклон)
+        p2 = [
+            p1[0] + l2 * np.cos(angle),
+            p1[1] + l2 * np.sin(angle),
+            l1 * 0.5 # Подъем колена
+        ]
+        # Точка 3: Конец Tibia (опускание к земле)
+        p3 = [
+            p2[0] + l3 * np.cos(angle) * 0.5,
+            p2[1] + l3 * np.sin(angle) * 0.5,
+            -l3 * 0.8 # Касание земли
+        ]
         
-        traces.append(go.Scatter3d(x=lx, y=ly, z=lz, mode='lines+markers', 
-                                   line=dict(color='gold' if side[i]>0 else 'orange', width=6),
-                                   marker=dict(size=4), name=f"Нога {i+1}"))
+        lx = [start_pos[0], p1[0], p2[0], p3[0]]
+        ly = [start_pos[1], p1[1], p2[1], p3[1]]
+        lz = [0, 0, p2[2], p3[2]]
+        
+        traces.append(go.Scatter3d(
+            x=lx, y=ly, z=lz, 
+            mode='lines+markers',
+            line=dict(color='gold' if i < 3 else 'orange', width=7),
+            marker=dict(size=4, color='black'),
+            name=f"Leg {i+1}"
+        ))
+        
     return traces
 
-# --- 4. ИНТЕРФЕЙС STREAMLIT ---
-st.set_page_config(page_title="FSIN Biomorphic Robot", layout="wide")
-st.title("ФСИН: Интеграция Резонанса в Робототехнику")
-
-tab1, tab2 = st.tabs(["📊 Анализ Сигналов", "🐜 3D Модель Робота"])
+# --- 3. ИНТЕРФЕЙС ---
+st.set_page_config(page_title="FSIN Biomorphic Lab", layout="wide")
+st.title("Сфиральное моделирование: Робот-Насекомое")
 
 with st.sidebar:
-    st.header("Константы")
-    mode = st.selectbox("Режим", ["Антисимметричный (Резонанс)", "Случайный"])
-    nodes = st.number_input("Нейроны", 2, 40, 10, step=2)
-    wurf = st.number_input("Золотой вурф", value=1.309, format="%.3f")
+    st.header("Математика (ФСИН)")
+    mode = st.selectbox("Режим баланса", ["Антисимметричный (Резонанс)", "Случайный"])
+    nodes = st.number_input("Узлы сети", 6, 40, 10, step=2)
+    wurf = st.sidebar.number_input("Золотой вурф", 1.0, 2.0, 1.309, format="%.3f")
+    
     st.divider()
-    st.header("Геометрия (мм)")
-    r_c = st.slider("Радиус R", 10, 100, 50)
-    h_c = st.slider("Высота", 10, 100, 30)
-    h_s = st.slider("S-переход", 5, 50, 10)
+    st.header("Геометрия (Сажени)")
+    # Привязываем размеры корпуса к Казенной сажени (217.6 мм)
+    body_l = st.slider("Длина корпуса (L)", 100.0, 300.0, 217.6)
+    body_w = body_l / wurf
+    r_coil = st.slider("Масштаб ног (R_coil)", 20.0, 100.0, 50.0)
 
-# Расчеты сети
+# Вычисления сети
 net = SfiralNetwork(2, nodes, wurf, balanced=(mode == "Антисимметричный (Резонанс)"))
-t_ax = np.linspace(-10, 10, 400)
+t_ax = np.linspace(-10, 10, 200)
 inp = np.column_stack([np.sin(t_ax), np.cos(t_ax)])
 states = np.array([net.forward(i) for i in inp])
-total_bal = np.sum(states, axis=1)
-stab_idx = np.mean(np.abs(total_bal))
+stab_idx = np.mean(np.abs(np.sum(states, axis=1)))
 
-with tab1:
+tab_an, tab_rob = st.tabs(["📉 Анализ резонанса", "🕷️ 3D Робот"])
+
+with tab_an:
     c1, c2 = st.columns([2, 1])
     with c1:
-        st.subheader("Фазовая устойчивость")
+        st.subheader("Осциллограмма узлов")
         fig2d, ax2d = plt.subplots(figsize=(10, 4))
-        ax2d.plot(t_ax, states, alpha=0.2); ax2d.plot(t_ax, total_bal, color='black', lw=2)
-        ax2d.axhline(0, color='red', ls='--'); st.pyplot(fig2d)
+        ax2d.plot(t_ax, states, alpha=0.3)
+        ax2d.plot(t_ax, np.sum(states, axis=1), color='black', lw=2, label='Суммарный вектор')
+        ax2d.axhline(0, color='red', ls='--')
+        st.pyplot(fig2d)
     with c2:
         st.metric("Stability Index", f"{stab_idx:.18f}")
         fig_h, ax_h = plt.subplots(figsize=(5, 5))
         sns.heatmap(pd.DataFrame(states).corr(), cmap='RdBu_r', center=0, cbar=False, ax=ax_h)
         st.pyplot(fig_h)
+
+with tab_rob:
+    st.subheader("Визуализация Гексапода")
+    st.info(f"Ширина корпуса (W) автоматически рассчитана по Вурфу: {body_w:.1f} мм")
     
-    st.subheader("Геометрия S-узла (Blender Script)")
-    coords = generate_sfiral(r_c, h_c, h_s)
-    fig3s = go.Figure(data=[go.Scatter3d(x=coords[:,0], y=coords[:,1], z=coords[:,2], mode='lines', line=dict(color='red', width=6))])
-    fig3s.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0, r=0, b=0, t=0))
-    st.plotly_chart(fig3s, use_container_width=True)
+    robot_data = get_hexapod_model(wurf, states, body_l, body_w, r_coil)
+    fig_rob = go.Figure(data=robot_data)
+    
+    # Настройка осей для корректного отображения
+    fig_rob.update_layout(
+        scene=dict(
+            aspectmode='data',
+            xaxis=dict(title='X (Длина)', range=[-250, 250]),
+            yaxis=dict(title='Y (Ширина)', range=[-250, 250]),
+            zaxis=dict(title='Z (Высота)', range=[-150, 150])
+        ),
+        margin=dict(l=0, r=0, b=0, t=0),
+        height=700
+    )
+    st.plotly_chart(fig_rob, use_container_width=True)
 
-with tab2:
-    st.subheader("Цифровой двойник: Сфиральный Гексапод")
-    st.markdown(f"Пропорции сегментов ног рассчитаны по Вурфу ({wurf}). Габариты корпуса: 217.6 x 166.2 мм.")
-    robot_traces = get_robot_insect_data(wurf)
-    fig_robot = go.Figure(data=robot_traces)
-    fig_robot.update_layout(scene=dict(aspectmode='data', 
-                                       xaxis=dict(range=[-300, 300]), 
-                                       yaxis=dict(range=[-300, 300]), 
-                                       zaxis=dict(range=[-150, 150])),
-                            margin=dict(l=0, r=0, b=0, t=0), height=700)
-    st.plotly_chart(fig_robot, use_container_width=True)
-
-st.download_button("Скачать данные", pd.DataFrame(states).to_csv(index=False).encode('utf-8'), "fsin_sphiral.csv")
+st.download_button("Экспорт CSV", pd.DataFrame(states).to_csv(index=False).encode('utf-8'), "robot_fsin_data.csv")
