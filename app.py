@@ -9,13 +9,13 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="FSIN: Сквозное моделирование", layout="wide")
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; }
+    .main { background-color: #0e1117; color: #ffffff; }
     .stMetric { background-color: #1c212d; padding: 15px; border-radius: 10px; border: 1px solid #ffca28; }
     h1, h2, h3 { color: #ffca28 !important; }
     .stTabs [aria-selected="true"] { background-color: #ffca28; color: black; }
-    .info-block { background-color: #11151c; padding: 15px; border-left: 4px solid #ffca28; margin-bottom: 20px; }
+    .info-block { background-color: #11151c; padding: 15px; border-left: 4px solid #ffca28; margin-bottom: 20px; color: #ffffff; }
     </style>
-    """, unsafe_allow_stdio=True)
+    """, unsafe_allow_html=True)
 
 # --- МАТЕМАТИЧЕСКОЕ ЯДРО ---
 class SfiralNetwork:
@@ -38,7 +38,8 @@ def build_sfiral(r, hc, hs):
     res = 600
     r_a, pts = r / 2.0, []
     for i in range(int(res*0.3)+1):
-        t = i / (res*0.3); phi = np.pi * (1-t)
+        t = i / (res*0.3)
+        phi = np.pi * (1-t)
         pts.append([r_a + r_a*np.cos(phi), -r_a*np.sin(phi), (hs/2)*t])
     for i in range(1, int(res*0.7)+1):
         t = i / (res*0.7)
@@ -120,7 +121,7 @@ st.markdown("""
 </ul>
 <b>Результат:</b> Теперь приложение — это цельная история. Вы меняете одну цифру в «Генетическом коде» и мгновенно видите, как меняется баланс сил, форма катушки и походка робота. Это и есть настоящее инженерное искусство.
 </div>
-""", unsafe_allow_stdio=True)
+""", unsafe_allow_html=True)
 
 # --- РАСЧЕТЫ ---
 is_bal = (mode == "Антисимметричный (Резонанс)")
