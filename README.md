@@ -124,6 +124,6 @@ streamlit run app.py
 ## Верификация
 
 Проверить математическую строгость антисимметрии и индекс устойчивости на основе сгенерированных данных можно в интерактивной среде:
-**[Запустить анализ в Google Colab](https://colab.research.google.com/github/ВАШ_ЛОГИН/fsin-complex/blob/main/notebooks/analysis.ipynb)**..
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Nigrasab/fsin-simulator/blob/main/notebooks/analysis.ipynb)
 ---
