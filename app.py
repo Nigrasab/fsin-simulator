@@ -20,18 +20,23 @@ class SfiralNetwork:
         self.layer_size = layer_size
         self.balanced = balanced
         self.neurons = [SfiralNeuron() for _ in range(layer_size)]
+        # Стабильная инициализация весов
+        np.random.seed(42)
         self.weights = np.random.uniform(-0.5, 0.5, (input_size, layer_size)) * base_weight
+    
     def forward(self, inputs):
+        # inputs должен быть массивом [sin, cos]
         outputs = []
         for i, n in enumerate(self.neurons):
             net_in = np.dot(inputs, self.weights[:, i])
             val = n.s_transition(net_in)
             if self.balanced and i >= self.layer_size // 2:
+                # Зеркальное отражение для резонанса
                 val = -outputs[i - self.layer_size // 2] 
             outputs.append(val)
         return np.array(outputs)
 
-# --- 2. ГЕОМЕТРИЯ СФИРАЛИ (S-УЗЕЛ) ---
+# --- 2. ГЕОМЕТРИЯ СФИРАЛИ (BLENDER S-УЗЕЛ) ---
 def generate_sfiral_coords(r, hc, hs, res=800):
     r_a, pts = r / 2.0, []
     res_arc = int(res * 0.3)
@@ -53,9 +58,11 @@ def calculate_leg_points(start_xyz, base_angle, lift_val, stretch_val, wurf, r_b
     l_coxa = r_base * 0.4
     l_femur = l_coxa * wurf
     l_tibia = l_femur * wurf
+    # Углы на базе данных ФСИН
     gamma = base_angle + (stretch_val * 0.2)
-    beta = 0.5 + (lift_val * 0.3)
-    alpha = 1.2 + (lift_val * 0.2)
+    beta = 0.4 + (lift_val * 0.4)
+    alpha = 1.0 + (lift_val * 0.3)
+    
     p1 = [
         start_xyz[0] + l_femur * np.cos(gamma) * np.cos(beta),
         start_xyz[1] + l_femur * np.sin(gamma) * np.cos(beta),
@@ -70,12 +77,12 @@ def calculate_leg_points(start_xyz, base_angle, lift_val, stretch_val, wurf, r_b
 
 # --- 4. ИНТЕРФЕЙС ---
 st.set_page_config(page_title="FSIN Integrated Lab", layout="wide")
-st.title("Интегрированный комплекс ФСИН: Анализ и Робототехника")
+st.title("Сфиральный комплекс ФСИН: Анализ и Робототехника")
 
 with st.sidebar:
     st.header("1. Параметры Сети")
     mode = st.selectbox("Режим баланса", ["Антисимметричный (Резонанс)", "Случайный"])
-    nodes = st.number_input("Узлы (четное)", 6, 40, 10, step=2)
+    nodes = st.number_input("Узлы (четное, мин 6)", 6, 40, 10, step=2)
     wurf = st.number_input("Золотой вурф", 1.0, 2.0, 1.309, format="%.3f")
     
     st.divider()
@@ -91,10 +98,13 @@ with st.sidebar:
     t_phase = st.slider("Фаза движения (t)", 0.0, 10.0, 0.0)
 
 # Расчеты
-net = SfiralNetwork(2, nodes, wurf, balanced=(mode == "Антисимметричный (Резонанс)"))
+is_bal = (mode == "Антисимметричный (Резонанс)")
+net = SfiralNetwork(2, nodes, wurf, balanced=is_bal)
+
+# Генерация данных для графика
 t_ax = np.linspace(-10, 10, 400)
 inp_signals = np.column_stack([np.sin(t_ax), np.cos(t_ax)])
-states = np.array([net.forward(i) for i in inp_signals])
+states = np.array([net.forward(s) for s in inp_signals])
 total_bal = np.sum(states, axis=1)
 stab_idx = np.mean(np.abs(total_bal))
 
@@ -107,7 +117,7 @@ with tab1:
         st.subheader("Осциллограмма состояний")
         fig2d, ax2d = plt.subplots(figsize=(10, 4))
         ax2d.plot(t_ax, states, alpha=0.3)
-        ax2d.plot(t_ax, total_bal, color='black', lw=2, label='Суммарный вектор')
+        ax2d.plot(t_ax, total_bal, color='black', lw=2, label='Баланс')
         ax2d.axhline(0, color='red', ls='--')
         st.pyplot(fig2d)
     with col_b:
@@ -129,7 +139,10 @@ with tab2:
 
 with tab3:
     st.subheader("Цифровой двойник Гексапода")
-    curr_state = net.forward(t_phase)
+    # Исправленная передача данных в нейросеть для робота
+    robot_input = np.array([np.sin(t_phase), np.cos(t_phase)])
+    curr_state = net.forward(robot_input)
+    
     fig_r = go.Figure()
     # Корпус
     t_b = np.linspace(0, 2*np.pi, 50)
@@ -140,11 +153,15 @@ with tab3:
     for i in range(6):
         m_ang = m_angles[i]
         start = [(body_l/2)*np.cos(m_ang), (body_w/2)*np.sin(m_ang), 0]
-        lift, stretch = curr_state[i % nodes], curr_state[(i+1) % nodes]
+        # Привязка к узлам сети
+        lift = curr_state[i % nodes]
+        stretch = curr_state[(i+1) % nodes]
         pts = np.array(calculate_leg_points(start, m_ang, lift, stretch, wurf, r_c))
         fig_r.add_trace(go.Scatter3d(x=pts[:,0], y=pts[:,1], z=pts[:,2], mode='lines+markers',
                                      line=dict(color='gold' if i<3 else 'orange', width=8), name=f"Нога {i+1}"))
-    fig_r.update_layout(scene=dict(aspectmode='data', zaxis=dict(range=[-150, 150])), margin=dict(l=0,r=0,b=0,t=0), height=700)
+    
+    fig_r.update_layout(scene=dict(aspectmode='data', zaxis=dict(range=[-150, 150])), 
+                        margin=dict(l=0,r=0,b=0,t=0), height=700)
     st.plotly_chart(fig_r, use_container_width=True)
 
 st.download_button("Экспорт CSV", pd.DataFrame(states).to_csv(index=False).encode('utf-8'), "fsin_full_data.csv")
